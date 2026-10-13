@@ -23,7 +23,10 @@ Item {
   readonly property string pluginId: manifest && manifest.id
     ? String(manifest.id) : "quickshell.spotify"
   readonly property string pluginDir: manifest && manifest.__sourceDir
-    ? String(manifest.__sourceDir) : ""
+    ? String(manifest.__sourceDir)
+    // The host strips private manifest metadata from third-party services.
+    : (Quickshell.env("XDG_CONFIG_HOME") || homeDirectory + "/.config")
+      + "/omarchy/plugins/" + pluginId
   readonly property string homeDirectory: Quickshell.env("HOME") || ""
   readonly property string stateHome: {
     var explicit = String(Quickshell.env("XDG_STATE_HOME") || "").trim()
@@ -648,7 +651,8 @@ Item {
   }
 
   function configuredEntry() {
-    var config = shell && shell.shellConfig ? shell.shellConfig : null
+    var config = shell && shell.shellConfig ? shell.shellConfig
+      : (shell && shell.barConfig ? { bar: shell.barConfig } : null)
     if (!config) return null
     var layout = config.bar && config.bar.layout ? config.bar.layout : null
     var sections = ["left", "center", "right"]
@@ -1383,6 +1387,7 @@ Item {
     activeView = normalizedView(view)
     authManager.withAccessToken(function(token, error) {
       if (token) {
+        root.succeed("")
         root.loadPlaybackState()
         root.loadProfile()
         root.loadSidebarPlaylists()
@@ -2201,7 +2206,7 @@ Item {
     else if (playlists) artistPlaylistsLoading = true
     else artistSongsLoading = true
     var query = append ? null : discography
-      ? { include_groups: "album,single,compilation", limit: 50 } : {
+      ? { include_groups: "album,single,compilation", limit: 10 } : {
       q: playlists
         ? Api.artistPlaylistSearchText(artist.name, artistCatalogQuery)
         : Api.catalogSearchText(artist.name, artistCatalogQuery),
@@ -2772,6 +2777,21 @@ Item {
   }
   IpcHandler {
     target: "quickshell.spotify.player"
+    function debugStatus(): string {
+      return JSON.stringify({connected: root.accountConnected,
+        personalClient: !!root.settings.clientId,
+        clientMatchesSettings: root.settings.clientId === authManager.resolvedClientId,
+        sessionPending: root.sessionPending, view: root.activeView,
+        cooldownSeconds: Math.ceil(Math.max(0, spotifyApi.rateLimitedUntil - Date.now()) / 1000),
+        inFlight: spotifyApi.requestsInFlight, queued: spotifyApi.requestQueue.length,
+        rateLimit: spotifyApi.lastRateLimit, history: spotifyApi.diagnostics,
+        searchLoading: root.searchLoading, searchError: root.searchError,
+        tracks: root.searchItems("track").length, artists: root.searchItems("artist").length,
+        playlists: root.playlists.length, savedTracks: root.savedTracks.length,
+        artistAlbums: root.artistAlbums.length, artistSongs: root.artistSongs.length,
+        detailLoading: root.detailLoading,
+        lastError: root.lastError})
+    }
     function configuredPlayer(): string { return root.shortcutPlayer }
     function togglePlayer(): string { return root.invokePlayerShortcut("toggleConfiguredPlayerShortcut") }
     function toggleMiniPlayer(): string { return root.invokePlayerShortcut("toggleMiniPlayerShortcut") }
@@ -3766,6 +3786,7 @@ Item {
     target: root.shell
     ignoreUnknownSignals: true
     function onShellConfigChanged() { root.syncSettings() }
+    function onBarConfigChanged() { root.syncSettings() }
   }
 
   Connections {

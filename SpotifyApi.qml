@@ -27,6 +27,7 @@ Item {
   property bool pumpAgain: false
   property var timedJobs: []
   property var diagnostics: []
+  property var lastRateLimit: ({})
   property int activeTimeoutMs: 15000
   property var xhrFactory: function() { return new XMLHttpRequest() }
   property var now: function() { return Date.now() }
@@ -215,6 +216,11 @@ Item {
           handle.xhr = null
           if (handle.aborted || job.finished === true) return
           var payload = Api.parseJson(xhr.responseText, null)
+          if (xhr.status === 429) root.lastRateLimit = {
+            retryAfter: Api.responseRetryAfter(xhr),
+            reason: payload && payload.error ? String(payload.error.reason || "") : "",
+            receivedAt: now()
+          }
           if (xhr.status === 401 && job.retried !== true) {
             auth.invalidateAccessToken()
             job.activeDeadlineAt = 0

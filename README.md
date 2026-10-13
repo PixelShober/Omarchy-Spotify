@@ -1,3 +1,5 @@
+> **Maintained fork:** PixelShober's Omarchy compatibility fixes are on `main`. See [fork maintenance and update instructions](LOCAL_FORK.md). Install this version with `omarchy plugin add https://github.com/PixelShober/Omarchy-Spotify.git --enable`.
+
 # Omarchy Spotify
 
 **Spotify in Quickshell—not Chromium.**
