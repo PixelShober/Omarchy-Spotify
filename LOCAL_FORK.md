@@ -14,6 +14,7 @@ This fork preserves the local compatibility fixes for PixelShober's Omarchy inst
 - Clear stale login errors after successful session restoration.
 - Use Spotify's current limit of 10 albums per artist-page request, retaining pagination.
 - Expose token-free playback/API diagnostics through `omarchy shell quickshell.spotify.player debugStatus`.
+- `omarchy shell quickshell.spotify.player playPlaylist <uri-or-link> <name>` plays a playlist from its first track with shuffle off and opens the full player on the queue (Spotify's Web API returns 404 for its personalized playlists such as Discover Weekly, so the queue is the visible track list).
 
 Personal client IDs, credentials and machine configuration remain outside this repository. The upstream backend release verification is preserved; these changes do not change the Rust backend inputs.
 

@@ -449,6 +449,8 @@ Item {
   property string pendingPlaybackMessage: ""
   property var pendingPlaybackRadio: null
   property int pendingPlaybackSerial: 0
+  // Playback serial started by playPlaylist; shuffle is turned off once it plays.
+  property int orderedPlaybackSerial: 0
   property int radioSerial: 0
   property var lastRadioPlaylist: null
   property bool radioContextSelected: false
@@ -2804,6 +2806,22 @@ Item {
       var surface = root.shortcutSurface()
       return surface && surface.adjustVolume(-0.05) ? "ok" : "unavailable"
     }
+    // Plays a playlist from its first track with shuffle off. Accepts a
+    // spotify:playlist: URI or an open.spotify.com/playlist/ link.
+    function playPlaylist(uri: string, name: string): string {
+      var match = /playlist[:\/]([A-Za-z0-9]{22})/.exec(String(uri || ""))
+      if (!match) return "invalid playlist URI"
+      if (!root.accountConnected) return "not signed in"
+      var title = String(name || "Playlist")
+      root.playItem({ type: "playlist", uri: "spotify:playlist:" + match[1],
+        id: match[1], name: title, inOrder: true }, null, null, "Playing " + title)
+      // Spotify's Web API hides its own personalized playlists (404), so the
+      // queue is the view that lists their upcoming tracks.
+      var surface = root.shortcutSurface()
+      if (surface && typeof surface.openFullPanel === "function")
+        surface.openFullPanel({ tab: "queue" })
+      return "ok"
+    }
   }
 
   function search(term, type, force) { return searchController.search(term, type, force) }
@@ -3026,6 +3044,8 @@ Item {
     localSocketWaitTimer.stop()
     backendClient.loadPlayback(body, function(ok, result, error) {
       if (ok) {
+        if (playbackSerial === root.orderedPlaybackSerial)
+          backendClient.sendCommand("set_shuffle", { enabled: false })
         if (playbackSerial === root.radioSerial)
           root.radioContextSelected = !!radioPlaylist
         if (successMessage) root.succeed(successMessage)
@@ -3051,6 +3071,8 @@ Item {
       fail("This Spotify item cannot be played")
       return
     }
+    orderedPlaybackSerial = item.inOrder === true ? playbackSerial : 0
+    if (item.inOrder === true) body.offset = { position: 0 }
     pendingPlayback = item
     pendingPlaybackBody = body
     pendingPlaybackMessage = String(successMessage || "")
@@ -3155,6 +3177,10 @@ Item {
             return
           }
           if (error) { root.fail(error); return }
+          if (playbackSerial === root.orderedPlaybackSerial)
+            spotifyApi.request("PUT", "/me/player/shuffle",
+              { state: "false", device_id: deviceId }, null, function() {},
+              { priority: "interactive" })
           root.succeed(successMessage)
           root.radioContextSelected = !!radioPlaylist
           root.selectedDeviceId = String(deviceId || root.selectedDeviceId)
