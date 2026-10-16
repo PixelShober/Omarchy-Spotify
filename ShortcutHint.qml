@@ -9,6 +9,9 @@ import "Api.js" as Api
 Item {
   id: root
 
+  // Panel tree searches skip hints; their visibility depends on those searches.
+  objectName: "shortcut-hint"
+
   property var sequences: []
   property bool ctrlHeld: false
   property bool shiftHeld: false

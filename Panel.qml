@@ -136,6 +136,22 @@ Item {
     && shortcutModeLatched && !typingInField && !shortcutsBlocked
   readonly property bool shortcutHintsInPopup: shortcutHintsEnabled
     && shortcutModeLatched && !typingInField
+  // Cursor targets shared by every shortcut hint. Each lookup walks the page's
+  // item tree, so evaluating them once here instead of per hint and per row
+  // keeps the shell responsive while the player opens in shortcut mode.
+  readonly property var hintNav: {
+    if (!shortcutHintsEnabled || !shortcutModeLatched) return null
+    var listAction = Api.isCursorListAction(panelCursorAction) ? panelCursorAction : ""
+    return {
+      tab: tabDestination(false),
+      back: tabDestination(true),
+      pageActions: pageCursorActions(),
+      regionActions: regionCursorActions(panelCursorRegion),
+      listAction: listAction,
+      collection: collectionForListAction(listAction || "list"),
+      list: pageListView()
+    }
+  }
   readonly property bool hintCtrlHeld: (heldModifierFlags & Qt.ControlModifier) !== 0
   readonly property bool hintShiftHeld: (heldModifierFlags & Qt.ShiftModifier) !== 0
   readonly property bool hintAltHeld: (heldModifierFlags & Qt.AltModifier) !== 0
@@ -823,9 +839,10 @@ Item {
   }
 
   function navHintFor(region, action) {
-    if (!shortcutHintsEnabled || !shortcutModeLatched) return ""
-    var tab = tabDestination(false)
-    var back = tabDestination(true)
+    var nav = hintNav
+    if (!nav) return ""
+    var tab = nav.tab
+    var back = nav.back
     var listAction = ""
     var listIndex = -1
     var listCount = 0
@@ -834,10 +851,9 @@ Item {
       listIndex = playlistShortcuts.currentIndex
       listCount = playlistShortcuts.count
     } else if (region === "page") {
-      listAction = Api.isCursorListAction(panelCursorAction)
-        ? panelCursorAction : ""
-      var collection = collectionForListAction(listAction || "list")
-      var list = pageListView()
+      listAction = nav.listAction
+      var collection = nav.collection
+      var list = nav.list
       if (collection) {
         listIndex = collection.listCurrentIndex
         listCount = collection.listCount
@@ -851,7 +867,7 @@ Item {
       action: action,
       currentRegion: panelCursorRegion,
       currentAction: panelCursorAction,
-      regionActions: regionCursorActions(panelCursorRegion),
+      regionActions: nav.regionActions,
       tabRegion: tab.region,
       tabAction: tab.action,
       backtabRegion: back.region,
@@ -865,12 +881,13 @@ Item {
   }
 
   function pageListRowHint(index, list) {
-    if (!list || !panelCursorVisible || !shortcutHintsActive) return ""
-    var actions = pageCursorActions()
+    var nav = hintNav
+    if (!list || !panelCursorVisible || !shortcutHintsActive || !nav) return ""
+    var actions = nav.pageActions
     var prev = Api.moveCursorAction(actions, "list", -1)
     var next = Api.moveCursorAction(actions, "list", 1)
-    var tab = tabDestination(false)
-    var back = tabDestination(true)
+    var tab = nav.tab
+    var back = nav.back
     return Api.cursorListRowHint({
       rowIndex: index,
       currentIndex: list.currentIndex,
@@ -888,12 +905,13 @@ Item {
   }
 
   function sidebarPlaylistNavHint(index) {
-    if (!panelCursorVisible || !shortcutHintsActive) return ""
+    var nav = hintNav
+    if (!panelCursorVisible || !shortcutHintsActive || !nav) return ""
     var actions = sidebarCursorActions()
     var prev = Api.moveCursorAction(actions, "sidebar-playlists", -1)
     var next = Api.moveCursorAction(actions, "sidebar-playlists", 1)
-    var tab = tabDestination(false)
-    var back = tabDestination(true)
+    var tab = nav.tab
+    var back = nav.back
     return Api.cursorListRowHint({
       rowIndex: index,
       currentIndex: playlistShortcuts.currentIndex,
@@ -913,7 +931,7 @@ Item {
   }
 
   function findNamedItem(item, name) {
-    if (!item) return null
+    if (!item || item.objectName === "shortcut-hint") return null
     if (item.visible === false) return null
     if (item.objectName === name) return item
     var kids = item.children
@@ -927,7 +945,8 @@ Item {
 
   function findNamedItems(item, name, found) {
     var results = found || []
-    if (!item || item.visible === false) return results
+    if (!item || item.objectName === "shortcut-hint" || item.visible === false)
+      return results
     if (item.objectName === name) results.push(item)
     var kids = item.children
     if (!kids) return results
